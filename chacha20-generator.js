@@ -283,23 +283,3 @@ ChaChaRand.prototype.sample = function(arr, sampleSize) {
   }
   return indicesSample.map(function(index){return arr[index];});
 };
-
-
-
-
-
-
-/**
- let key  = new ArrayBuffer(CHACHA_KEYSIZE);
- let iv   = new ArrayBuffer(CHACHA_IVSIZE);
- let g    = new ChaCha(key, iv);
- let v = new Uint8Array(g());
- for (let i = 0; i < v.length; i++) {
-    pass = pass && v[i] == b0[i];
- }
- v = new Uint8Array(g());
- for (let i = 0; i < v.length; i++) {
-    pass = pass && v[i] == b1[i];
- }
-
- */
