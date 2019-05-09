@@ -8,10 +8,27 @@
 
 // Quick function to get a hex string as an array of bytes
 // thanks https://stackoverflow.com/a/50868276/4192226
-const fromHexString = hexString => new Uint8Array(hexString.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-const CHACHA_BLOCK = 64; //bytes
+function fromHexString (hexString) {
+  return new Uint8Array(hexString.match(/.{1,2}/g).map(function(byte){return parseInt(byte, 16);}));
+}
+// Maybe I should throw this one as a ChaChaRand.range() so it doesn't accidentally screw with other people's code?
+function myRange(start, stop, step) {
+  let a = [start], b = start;
+  while (b < stop) {
+    a.push(b += step || 1);
+  }
+  return a;
+}
+const ChaChaRand = function(seed) {
+  this.reseed(seed);
+};
+// TODO make some sort of validateNum(num,max,min...) or something to streamline number validation and throw errors?
+ChaChaRand.CHACHA_BLOCK = 64; // bytes
+// Max number of bits one can request as number before asking values in a range where there's a loss of precision
+ChaChaRand.MAX_SAFE_BITS = Math.log2(Number.MAX_SAFE_INTEGER);
 
-var ChaChaRand = function(seed) {
+// Reseed. Note the current block (if existent) is entirely lost once you csll reseed.
+ChaChaRand.prototype.reseed = function(seed) {
   // TODO validate the seed is actually a hex string
   let keyHexSize = CHACHA_KEYSIZE*2;
   let ivHexSize = CHACHA_IVSIZE*2;
@@ -22,20 +39,14 @@ var ChaChaRand = function(seed) {
   this._seed = seed.substr(0, seedSize);
   this._key = fromHexString(seed.substr(0, keyHexSize));
   this._iv = fromHexString(seed.substr(keyHexSize, ivHexSize));
-  // Actually, I guess I don't need to store any of ^that here, but I'll leave them for now just in case.
+  // Actually, I guess ^those don't need to be stored as instance variables, but I'll leave them for now just in case.
   this._chacha = new ChaCha(this._key.buffer, this._iv.buffer);
   // Get the first block right away (64 byte array buffer, turned into Uint8Array)
   this._randBlock = new Uint8Array(this._chacha());
   // Index of the next unused byte in the block
   this._nextByteIndex = 0;
   this._blockCounter = 1;
-
-  // // So you want individual bits...
-  // this._bitReserve = null;
-  // this._bitReserveCount = 0;
 };
-
-// TODO reseed method? If so, would you just throw away the current block, maybe decide based on a "throwBlock" param?
 //     (reseed would be practically the same as creating a new ChaChaRand with a new seed though, so it's whatever?)
 
 // How many blocks has this generator produced so far with its seed? (each block is 64 bytes)
@@ -45,9 +56,11 @@ ChaChaRand.prototype.generatedBlocksCount = function() {
 // How many bits have been requested. Somewhat ill defined in that the block may be generated as the chacha's state
 // well before any bytes are requested via getByte(s).
 ChaChaRand.prototype.usedBitsCount = function() {
-  return this._nextByteIndex*8 + ((this._blockCounter-1)*(CHACHA_BLOCK*8));
+  return this._nextByteIndex*8 + ((this._blockCounter-1)*(ChaChaRand.CHACHA_BLOCK*8));
 };
 
+// Get a new block from the underlying chacha20 implementation.
+// Throws "output exhausted" if chacha20 has cycled through its counter values.
 ChaChaRand.prototype._newRandBlock = function() {
   // TODO handle the "output exhausted" error, and also... what should we do there?
   this._randBlock = new Uint8Array(this._chacha());
@@ -55,28 +68,28 @@ ChaChaRand.prototype._newRandBlock = function() {
   this._nextByteIndex = 0;
 };
 
-// Get the amount of bytes specified
+// Get the amount of bytes specified TODO see todo below
 ChaChaRand.prototype.getBytes = function(n) {
-  if(!n) {n = 0;}
-  if(n > 64 || n<=0){
-    // TODO just make all the blocks you need! it's like this just so it's simpler for now (and 64 is reasonable right?)
-    throw new Error("Number of bytes to return should be a minimum of 1 and maximum of 64");
+  // TODO (maybe?) throw an error if proceeding would cause an "output exhausted" error
+  if(isNaN(n) || n<=0){
+    throw new Error("Invalid number given (must be a positive number)");
   }
   let endIndex = this._nextByteIndex + n;
   let ret = this._randBlock.slice(this._nextByteIndex, endIndex);
-  if(ret.length < n) {
-    // need a new block ... I just realised I can make this recursive, but that feels gross.
+  this._nextByteIndex += n;
+  // If the current block wasn't enough, then:
+  while(ret.length < n) {
+    // amount of bytes we still need
     let missing = n - ret.length;
     this._newRandBlock();
     let old_ret = ret;
-    ret = new Uint8Array(n);
+    let new_bytes = this._randBlock.slice(0, missing);
+    ret = new Uint8Array(old_ret.length + new_bytes.length);
     // Merging bytes from the old block with bytes from the new one
     ret.set(old_ret);
-    ret.set(this._randBlock.slice(0, missing), old_ret.length);
+    ret.set(new_bytes, old_ret.length);
     this._nextByteIndex = missing;
-    return ret;
   }
-  this._nextByteIndex += n;
   return ret;
 };
 
@@ -84,16 +97,19 @@ ChaChaRand.prototype.getByte = function() {
   return this.getBytes(1);
 };
 
-// get a random positive number in [0 , 2**(nbits-1)), up to 53 bits
+// get a random positive number in [0 , 2**(nbits-1)), up to MAX_SAFE_BITS bits
+// TODO explain somewhere how js is weird about bitwise operators, to warn users against the int32 conversion
 ChaChaRand.prototype.getRandomBitsAsNum = function (nbits) {
-  if(nbits > 53 || nbits < 1) {throw new Error("The argument must be a positive number in [1,53]");}
+  if(nbits > ChaChaRand.MAX_SAFE_BITS || nbits < 1) {
+    throw new Error(`Requested invalid number of bits. Safe bits to represent are in [0,${ChaChaRand.MAX_SAFE_BITS}]`);
+  }
   let neededBytes = Math.ceil((nbits)/8);
   let bytes = this.getBytes(neededBytes);
   let ret = 0;
   // bits that didn't consume an entire byte
   let extraBits = nbits%8;
   let bitmask = extraBits?((1<<extraBits)-1):-1;
-  // TODO recycle unused bits. I mean, asking for 1 single bit costs as much randomness as asking for a whole byte here!
+  // TODO recycle unused bits? I mean, asking for 1 single bit costs as much randomness as asking for a whole byte here
   ret = bytes[0] & bitmask;
   for(let i = 1; i < neededBytes; i++) {
     // should optimize by using bit shifts when nbits is small enough that working with int32 numbers is ok?
@@ -110,8 +126,7 @@ ChaChaRand.prototype.getRandomUInt = function(max) {
     // I feel like there's probably some error in their code somewhere. And with "someone" I mean me.
     throw Error("Provide a positive max value for the number to be generated");
   }
-  // TODO if max >= 2**53 should probably throw some error (which can be ignored via a second arg?)
-  // also, if we want to get signed ints, the range can be bigger than 2^53 numbers because negatives are available?
+  // TODO if max >= Number.MAX_SAFE_INTEGER should probably throw some error (which could be ignored via a second arg?)
   let maxbits = Math.floor(Math.log2(max))+1;
   let ret = this.getRandomBitsAsNum(maxbits);
   while(ret > max) {
@@ -177,22 +192,43 @@ ChaChaRand.prototype.getRandomFloat = function() {
 };
 
 
+// Fisher Yates shuffle, but it can be stopped after the given number of steps, and if so
+// it returns only the last 'steps' elements of the shuffled array (so it can be used for random sampling)
+// Note it's in-place so it rearranges the list you give it
+ChaChaRand.prototype._FisherYates = function(arr, steps) {
+  let n = arr.length;
+  if(steps===undefined) {
+    // If not 'steps' argument is given, do a complete shuffle
+    steps = n-1;
+  }
+  if (steps <= 0 || steps > (n-1)) {
+    throw "Invalid 'steps' value. The number of steps should be positive and no more than the array's length - 1";
+  }
+  // let peeps = myRange(1,n);
+  let j = n, selections = 0;
+  while(selections < steps) {
+    let k = this.getRandomUInt(j-1);
+    // Exchanging arr_k with arr_(j-1)
+    let aux = arr[k];
+    arr[k] = arr[j - 1];
+    arr[j - 1] = aux;
+    j--;
+    selections++;
+  }
+  // "reverse" because that way the sample is ordered from first chosen to last chosen.
+  return (steps===(n-1)?arr:arr.slice(n - steps).reverse());
+};
+
 // Fisher Yates shuffle. Shuffles in place, so arr is modified.
 ChaChaRand.prototype.shuffle = function(arr) {
-  let n = arr.length;
-  for(let i = n-1; i > 0; i--){
-    let k = this.getRandomUInt(i);
-    // Exchanging arr_k with arr_i
-    let aux = arr[k];
-    arr[k] = arr[i];
-    arr[i] = aux;
-  }
+  this._FisherYates(arr);
   // return arr; commented because it's in place and a return value might make you think it's not.
 };
 
-// Reservoir sampling (why private? because .sample is the real one. Note it returns indices, not arr's contents.
+
+// Reservoir sampling. Note it returns indices, not arr's contents. Used to be the base for sample()
+// but I replaced it with the stoppable Fisher-Yates method... not deleting it just yet just in case
 ChaChaRand.prototype._reservoirSampling = function(arr, sampleSize) {
-  // TODO isn't just a partial Fisher Yates better? It loops less, spends the same amount of entropy... look into that
   let n = arr.length;
   if(sampleSize <= 0 || sampleSize>=n) {
     // Could also throw if sampleSize = 1, because you can just use some vanilla rand number function in that case.
@@ -214,21 +250,25 @@ ChaChaRand.prototype._reservoirSampling = function(arr, sampleSize) {
   return reservoir;
 };
 
-// Random sample of arr. Returns randomly chosen indices to represent elements of the given array,
-// DOES NOT return the elements themselves.
+// Random sample of arr (objects from the sample are the same as the ones in the original array given)
 ChaChaRand.prototype.sample = function(arr, sampleSize) {
   let n = arr.length;
-  if(sampleSize >= (n/2)) {
-    return this._reservoirSampling(arr, sampleSize);
+  if (sampleSize<= 0 || sampleSize> (n-1)) {
+    throw "Invalid sample size. The sample size should be positive and no more than the array's length";
+  }
+  // In this case we don't want to shuffle the list, so we avoid that by working over indices instead:
+  let indices = myRange(0,n-1);
+  let indicesSample = [];
+  if(sampleSize <= (n/2)) {
+     indicesSample = this._FisherYates(indices, sampleSize);
   }
   else{
     // In this case you can choose a sample of n - sampleSize and then return the ones you didn't choose...
-    // why do that? because the bigger the sample size the less iterations of the second _reservoirSampling loop,
+    // why do that? because the smaller the sample size the less iterations of the _FisherYates loop,
     // which means less entropy used.
     let antiSize = n-sampleSize;
-    let antiSample = this._reservoirSampling(arr,antiSize);
-    let actualSample = [];
-    // Using a ".contains" based loop to get which arr elements aren't in antiSample feels inefficient, so let's try:
+    let antiSample = this._FisherYates(indices,antiSize);
+    // An .includes based loop to get which elements aren't in antiSample feels n^2 inefficient, so let's try:
     let auxSet = {};
     for(let i = 0; i < antiSize; i++){
       auxSet[antiSample[i]] = true;
@@ -237,12 +277,11 @@ ChaChaRand.prototype.sample = function(arr, sampleSize) {
       // === is me being overly paranoid of missing a bug because I checked for truthy values instead of "true"
       if(auxSet[i]===true){continue;}
       // If the index wasn't part of the anti sample, then it's part of the actual sample
-      actualSample.push(i);
+      indicesSample.push(i);
     }
-    return actualSample;
+    // use the indices to get the actual elements:
   }
-  // Tempted to return a Set, to emphasize this isn't supposed to be a randomly ordered array, but just a random sample.
-  // (i.e. there's a bias towards the indices reflecting a 1...n order)
+  return indicesSample.map(function(index){return arr[index];});
 };
 
 
