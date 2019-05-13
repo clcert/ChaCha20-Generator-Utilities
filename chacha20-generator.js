@@ -197,8 +197,10 @@ ChaChaRand.prototype.getRandomFloat = function() {
 // Note it's in-place so it rearranges the list you give it
 ChaChaRand.prototype._FisherYates = function(arr, steps) {
   let n = arr.length;
-  if(steps===undefined) {
-    // If not 'steps' argument is given, do a complete shuffle
+  let complete = steps===undefined;
+  if(complete) {
+    // If no 'steps' argument is given, do a complete shuffle. A shuffle is completed after n-1 steps, but
+    // someone can also potentially choose steps=n-1 with the intention of getting a sample of n-1 random elements.
     steps = n-1;
   }
   if (steps <= 0 || steps > (n-1)) {
@@ -216,7 +218,7 @@ ChaChaRand.prototype._FisherYates = function(arr, steps) {
     selections++;
   }
   // "reverse" because that way the sample is ordered from first chosen to last chosen.
-  return (steps===(n-1)?arr:arr.slice(n - steps).reverse());
+  return (complete?arr:arr.slice(n - steps).reverse());
 };
 
 // Fisher Yates shuffle. Shuffles in place, so arr is modified.
@@ -250,17 +252,26 @@ ChaChaRand.prototype._reservoirSampling = function(arr, sampleSize) {
   return reservoir;
 };
 
-// Random sample of arr (objects from the sample are the same as the ones in the original array given)
-ChaChaRand.prototype.sample = function(arr, sampleSize) {
+// Random sample of arr (objects from the sample are the same as the ones in the original array given).
+// Setting orderMatters to false allows the function to use less entropy when sampleSize > arr.length/2
+// but the resulting list will have the chosen elements appearing in their original order.
+ChaChaRand.prototype.sample = function(arr, sampleSize, orderMatters) {
+  if(orderMatters===undefined){
+    // If orderMatters, the returned list can be used when you want to *sequentially* choose sampleSize random elements
+    // from arr. If it doesn't we can do an entropy optimization, which will be biased to be ordered so that
+    // the indices are in their original order, so we only do this when the sample's order doesn't matter.
+    orderMatters=true;
+  }
   let n = arr.length;
-  if (sampleSize<= 0 || sampleSize> (n-1)) {
-    throw "Invalid sample size. The sample size should be positive and no more than the array's length";
+  if (sampleSize<= 0 || sampleSize > (n-1)) {
+    // That's right, no sampleSize===n... same reasoning as to why randomUInt throws on max===0 to be honest.
+    throw "Invalid sample size. The sample size should be positive and no more than the array's length - 1";
   }
   // In this case we don't want to shuffle the list, so we avoid that by working over indices instead:
   let indices = myRange(0,n-1);
   let indicesSample = [];
-  if(sampleSize <= (n/2)) {
-     indicesSample = this._FisherYates(indices, sampleSize);
+  if(sampleSize <= (n/2) || orderMatters) {
+    indicesSample = this._FisherYates(indices, sampleSize);
   }
   else{
     // In this case you can choose a sample of n - sampleSize and then return the ones you didn't choose...
