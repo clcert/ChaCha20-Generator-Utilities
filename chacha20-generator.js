@@ -4,7 +4,33 @@
  *
  * The seed is assumed to be a 320 bits hex number represented by an 80 characters long string
  * if it's longer, then it truncates it to its first 80 characters and discards the rest.
+ *
+ *
+ *
+ * * For ChaChaRand.prototype.random():
+ * * Source https://github.com/davidbau/seedrandom/blob/released/seedrandom.js
+ * * --------------------------------------------------------------------------
+ * * Copyright 2014 David Bau.
+ * *
+ * * Permission is hereby granted, free of charge, to any person obtaining
+ * * a copy of this software and associated documentation files (the
+ * * "Software"), to deal in the Software without restriction, including
+ * * without limitation the rights to use, copy, modify, merge, publish,
+ * * distribute, sublicense, and/or sell copies of the Software, and to
+ * * permit persons to whom the Software is furnished to do so, subject to
+ * * the following conditions:
+ * *
+ * * The above copyright notice and this permission notice shall be
+ * * included in all copies or substantial portions of the Software.
+ * * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+
 
 // Quick function to get a hex string as an array of bytes
 // thanks https://stackoverflow.com/a/50868276/4192226
@@ -99,7 +125,7 @@ ChaChaRand.prototype.getByte = function() {
 
 // get a random positive number in [0 , 2**(nbits-1)), up to MAX_SAFE_BITS bits
 // TODO explain somewhere how js is weird about bitwise operators, to warn users against the int32 conversion
-ChaChaRand.prototype.getRandomBitsAsNum = function (nbits) {
+ChaChaRand.prototype.getRandBits = function (nbits) {
   if(nbits > ChaChaRand.MAX_SAFE_BITS || nbits < 1) {
     throw new Error(`Requested invalid number of bits. Safe bits to represent are in [0,${ChaChaRand.MAX_SAFE_BITS}]`);
   }
@@ -120,53 +146,30 @@ ChaChaRand.prototype.getRandomBitsAsNum = function (nbits) {
 };
 
 // Get a ramdom number in [0, max]
-ChaChaRand.prototype.getRandomUInt = function(max) {
+ChaChaRand.prototype.randUInt = function(max) {
   if(!max || max < 0) {
     // I realise that if max===0 I can just return 0 right away instead, but if someone's asking for that,
     // I feel like there's probably some error in their code somewhere. And with "someone" I mean me.
-    throw Error("Provide a positive max value for the number to be generated");
+    throw new Error("Provide a positive max value for the number to be generated");
   }
   // TODO if max >= Number.MAX_SAFE_INTEGER should probably throw some error (which could be ignored via a second arg?)
   let maxbits = Math.floor(Math.log2(max))+1;
-  let ret = this.getRandomBitsAsNum(maxbits);
+  let ret = this.getRandBits(maxbits);
   while(ret > max) {
-    ret = this.getRandomBitsAsNum(maxbits);
+    ret = this.getRandBits(maxbits);
   }
   return ret;
 };
 
 // Rand in [min, max]
-ChaChaRand.prototype.getRandomIntInRange = function(min, max) {
-  return this.getRandomUInt(max - min) + min;
+ChaChaRand.prototype.randInt = function(min, max) {
+  return this.randUInt(max - min) + min;
 };
 
 
-// For the following function:
-// Source https://github.com/davidbau/seedrandom/blob/released/seedrandom.js
-/*
-Copyright 2014 David Bau.
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
 // This function returns a random double in [0, 1) that contains
 // randomness in every bit of the mantissa of the IEEE 754 value.
-ChaChaRand.prototype.getRandomFloat = function() {
+ChaChaRand.prototype.random = function() {
   // David Bau's code and comments, but replacing RC4 with ChaCha20. Also replaced "math" with "Math" and var with let
   // The following constants are related to IEEE 754 limits.
   let width = 256,        // each ChaCha20 output is 0 <= x < 256
@@ -175,13 +178,13 @@ ChaChaRand.prototype.getRandomFloat = function() {
       startdenom = Math.pow(width, chunks),
       significance = Math.pow(2, digits),
       overflow = significance * 2;
-  let n = this.getRandomBitsAsNum(chunks*8),   // Start with a numerator n < 2 ^ 48
+  let n = this.getRandBits(chunks*8),   // Start with a numerator n < 2 ^ 48
       d = startdenom,                          //   and denominator d = 2 ^ 48.
       x = 0;                                   //   and no 'extra last byte'.
   while (n < significance) {                   // Fill up all significant digits by
     n = (n + x) * width;                       //   shifting numerator and
     d *= width;                                //   denominator and generating a
-    x = this.getRandomBitsAsNum(8);            //   new least-significant-byte.
+    x = this.getRandBits(8);            //   new least-significant-byte.
   }
   while (n >= overflow) {                      // To avoid rounding up, before adding
     n /= 2;                                    //   last byte, shift everything
@@ -197,6 +200,7 @@ ChaChaRand.prototype.getRandomFloat = function() {
 // Note it's in-place so it rearranges the list you give it
 ChaChaRand.prototype._FisherYates = function(arr, steps) {
   let n = arr.length;
+  if(n===0) {throw new Error("Can't shuffle empty");}
   let complete = steps===undefined;
   if(complete) {
     // If no 'steps' argument is given, do a complete shuffle. A shuffle is completed after n-1 steps, but
@@ -204,12 +208,12 @@ ChaChaRand.prototype._FisherYates = function(arr, steps) {
     steps = n-1;
   }
   if (steps <= 0 || steps > (n-1)) {
-    throw "Invalid 'steps' value. The number of steps should be positive and no more than the array's length - 1";
+    throw new Error("Invalid 'steps' value. The number of steps should be positive and no more than the array's length - 1");
   }
   // let peeps = myRange(1,n);
   let j = n, selections = 0;
   while(selections < steps) {
-    let k = this.getRandomUInt(j-1);
+    let k = this.randUInt(j-1);
     // Exchanging arr_k with arr_(j-1)
     let aux = arr[k];
     arr[k] = arr[j - 1];
@@ -232,9 +236,10 @@ ChaChaRand.prototype.shuffle = function(arr) {
 // but I replaced it with the stoppable Fisher-Yates method... not deleting it just yet just in case
 ChaChaRand.prototype._reservoirSampling = function(arr, sampleSize) {
   let n = arr.length;
+  if(n===0) {throw new Error("Can't sample from empty");}
   if(sampleSize <= 0 || sampleSize>=n) {
     // Could also throw if sampleSize = 1, because you can just use some vanilla rand number function in that case.
-    throw Error("Sample size must be a number between 1 and one less than the array size");
+    throw new Error("Sample size must be a number between 1 and one less than the array size");
   }
   // this all's straight from wiki =P
   let reservoir = [];
@@ -244,7 +249,7 @@ ChaChaRand.prototype._reservoirSampling = function(arr, sampleSize) {
   }
   // replace elements with gradually decreasing probability
   for(let i = sampleSize; i < n; i++){
-    let rando = this.getRandomUInt(i);
+    let rando = this.randUInt(i);
     if(rando < sampleSize) {
       reservoir[rando] = i;
     }
@@ -263,9 +268,10 @@ ChaChaRand.prototype.sample = function(arr, sampleSize, orderMatters) {
     orderMatters=true;
   }
   let n = arr.length;
+  if(n===0) {throw new Error("Can't sample from empty");}
   if (sampleSize<= 0 || sampleSize > (n-1)) {
     // That's right, no sampleSize===n... same reasoning as to why randomUInt throws on max===0 to be honest.
-    throw "Invalid sample size. The sample size should be positive and no more than the array's length - 1";
+    throw new Error("Invalid sample size. The sample size should be positive and no more than the array's length - 1");
   }
   // In this case we don't want to shuffle the list, so we avoid that by working over indices instead:
   let indices = myRange(0,n-1);
@@ -293,4 +299,28 @@ ChaChaRand.prototype.sample = function(arr, sampleSize, orderMatters) {
     // use the indices to get the actual elements:
   }
   return indicesSample.map(function(index){return arr[index];});
+};
+
+// Return a random element from the given array. Throws "Can't choose from empty" if arr.length === 0.
+ChaChaRand.prototype.choice = function(arr) {
+  let n = arr.length;
+  if(n===0) {throw new Error("Can't choose from empty");}
+  let chosen = this.randUInt(n-1);
+  return arr[chosen];
+};
+
+// Sampling of size k, but with replacement. Throws "Can't choose from empty" if arr.length === 0
+// It'd be neat to implement it like Python with all those "weights" parameters, but that's a maybe in the future deal.
+ChaChaRand.prototype.choices = function (arr, choicesSize) {
+  let n = arr.length;
+  if(n===0) {throw new Error("Can't choose from empty");}
+  if (choicesSize <= 0 || choicesSize > (n-1)) {
+    throw new Error("Invalid choices size. Size should be positive.");
+  }
+  let res = [];
+  for(let i = 0; i < choicesSize; i++) {
+    let chosen = this.randUInt(n);
+    res.push(arr[chosen]);
+  }
+  return res;
 };
