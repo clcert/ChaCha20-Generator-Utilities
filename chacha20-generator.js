@@ -45,7 +45,14 @@ function myRange(start, stop, step) {
   }
   return a;
 }
+
+
 const ChaChaRand = function(seed) {
+  if(seed===undefined) {
+    console.warn("No seed given. Please note no random seed values are provided by default, so not passing a seed " +
+        "creates the same object as if it had been initialized with a string of 80 '0's concatenated together.");
+    // However, not passing a seed at all is slightly more efficient than actually passing a string of 0s.
+  }
   this.reseed(seed);
 };
 // TODO make some sort of validateNum(num,max,min...) or something to streamline number validation and throw errors?
@@ -58,13 +65,23 @@ ChaChaRand.prototype.reseed = function(seed) {
   // TODO validate the seed is actually a hex string
   let keyHexSize = CHACHA_KEYSIZE*2;
   let ivHexSize = CHACHA_IVSIZE*2;
-  let seedSize = keyHexSize+ivHexSize;
-  if(seed.length < seedSize) {
-    throw new Error("Seed should be a hex string at least seedSize characters long")
+  let seedSize = keyHexSize+ivHexSize;    // 80
+  if(seed===undefined) {
+    // No seed given, default to zeros:
+    this._seed = "00000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    // Reminder: make these ArrayBuffer if you stop keeping them as instance variables.
+    this._key  = new Uint8Array(CHACHA_KEYSIZE);
+    this._iv   = new Uint8Array(CHACHA_IVSIZE);
   }
-  this._seed = seed.substr(0, seedSize);
-  this._key = fromHexString(seed.substr(0, keyHexSize));
-  this._iv = fromHexString(seed.substr(keyHexSize, ivHexSize));
+  else if(seed.length < seedSize) {
+    throw new Error(`When a seed is given, it should be a hex string at least ${seedSize} characters long`)
+  }
+  else {
+    // A seed was given and ChaChaRand saw that it was good
+    this._seed = seed.substr(0, seedSize);
+    this._key = fromHexString(seed.substr(0, keyHexSize));
+    this._iv = fromHexString(seed.substr(keyHexSize, ivHexSize));
+  }
   // Actually, I guess ^those don't need to be stored as instance variables, but I'll leave them for now just in case.
   this._chacha = new ChaCha(this._key.buffer, this._iv.buffer);
   // Get the first block right away (64 byte array buffer, turned into Uint8Array)
@@ -269,14 +286,27 @@ ChaChaRand.prototype.sample = function(arr, sampleSize, orderMatters) {
   }
   let n = arr.length;
   if(n===0) {throw new Error("Can't sample from empty");}
-  if (sampleSize<= 0 || sampleSize > (n-1)) {
+  if (sampleSize<= 0 || sampleSize > n) {
     // That's right, no sampleSize===n... same reasoning as to why randomUInt throws on max===0 to be honest.
-    throw new Error("Invalid sample size. The sample size should be positive and no more than the array's length - 1");
+    throw new Error("Invalid sample size. The sample size should be positive and no more than the array's length");
   }
   // In this case we don't want to shuffle the list, so we avoid that by working over indices instead:
   let indices = myRange(0,n-1);
   let indicesSample = [];
-  if(sampleSize <= (n/2) || orderMatters) {
+  // Let's allow this I suppose, since asking for it it kinda maybe makes sense if the order matters.
+  if(sampleSize===n) {
+    if(orderMatters) {
+      // Reverse so they get them in the order they are chosen.
+      this.shuffle(indices);
+      indicesSample = indices.reverse();
+    }
+    else {
+      // Dunno why you'd ask for this, but here you go :^)   (notice, in the end while the objects are the same
+      // you do get a different array)
+      indicesSample = indices;
+    }
+  }
+  else if(sampleSize <= (n/2) || orderMatters) {
     indicesSample = this._FisherYates(indices, sampleSize);
   }
   else{
