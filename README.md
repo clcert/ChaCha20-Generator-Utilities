@@ -24,7 +24,7 @@ chacha.getBytes(3)      // Uint8Array(3) [ 92, 49, 78 ]
 chacha.getRandBits(4)   // 9
 
 // This will act as if the seed were a string of 80 zeros (but also warn you about it)
-let chacha0 = ChaChaRand();
+let chacha0 = new ChaChaRand();
 
 ```
 
