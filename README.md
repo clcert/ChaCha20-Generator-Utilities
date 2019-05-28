@@ -12,7 +12,7 @@ order to be able to use the ChaChaRand object, like so:
 
 
 When instantiating, the seed should be a hexadecimal number represented by a string of at least 80 characters. 
-If it's longer, then the extra characters are ignored.
+If it's longer the extra characters are ignored.
 
 ```js
 let chacha = new ChaChaRand("5ee5e2327a68a9db8a78efdaa855d102ed8bf14e128e0a72ae1c9d72e5f9747e27479f21dfbfd501");
@@ -23,7 +23,7 @@ chacha.getBytes(3)      // Uint8Array(3) [ 92, 49, 78 ]
 // Get random bits represented as a number (a random integer in [0, 2^n - 1] where n is the argument given)
 chacha.getRandBits(4)   // 9
 
-// This will act as if the seed were a string of 80 zeros
+// This will act as if the seed were a string of 80 zeros (but also warn you about it)
 let chacha0 = ChaChaRand();
 
 ```
