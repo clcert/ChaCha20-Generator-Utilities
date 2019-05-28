@@ -4,7 +4,7 @@ Uses the ChaCha20 implementation https://github.com/skeeto/chacha-js as a base f
 
 ## Instantiation and simple examples
 First, make sure you've also included the base ChaCha20 implementation in 
-order to use be able to use the ChaChaRand object, like so:
+order to be able to use the ChaChaRand object, like so:
 ```html
 <script type="text/javascript" src="lib/chacha-js-skeeto/chacha.js"></script>
 <script type="text/javascript" src="chacha20-generator.js"></script>
