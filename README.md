@@ -11,8 +11,8 @@ order to be able to use the ChaChaRand object, like so:
 ```
 
 
-When instantiating, the seed should be a hexadecimal number represented by a string of at least 80 characters. 
-If it's longer the extra characters are ignored.
+When instantiating, the seed should be a hexadecimal number represented by a string of 80 characters. 
+It can be longer than that, but if it is the extra (rightmost) characters are ignored.
 
 ```js
 let chacha = new ChaChaRand("5ee5e2327a68a9db8a78efdaa855d102ed8bf14e128e0a72ae1c9d72e5f9747e27479f21dfbfd501");
