@@ -1,9 +1,9 @@
-# ChaCha20-Generator-Utilities
+# ChaCha20-Generator-Utilities - JavaScript
 Uses the ChaCha20 implementation https://github.com/skeeto/chacha-js as a base for various functions related to random number generation.
 
 
 ## Instantiation and simple examples
-First, make sure you've also included the base ChaCha20 implementation in 
+First, make sure you've also included the base ChaCha20 implementation in
 order to be able to use the ChaChaRand object, like so:
 ```html
 <script type="text/javascript" src="lib/chacha-js-skeeto/chacha.js"></script>
@@ -11,7 +11,7 @@ order to be able to use the ChaChaRand object, like so:
 ```
 
 
-When instantiating, the seed should be a hexadecimal number represented by a string of 80 characters. 
+When instantiating, the seed should be a hexadecimal number represented by a string of 80 characters.
 It can be longer than that, but if it is the extra (rightmost) characters are ignored.
 
 ```js
@@ -30,4 +30,3 @@ let chacha0 = new ChaChaRand();
 // Similarly, you can reseed with nothing (since you are explicitly seeding, no warning this time)
 chacha.reseed();
 ```
-
