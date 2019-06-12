@@ -164,10 +164,9 @@ ChaChaRand.prototype.getRandBits = function (nbits) {
 
 // Get a ramdom number in [0, max]
 ChaChaRand.prototype.randUInt = function(max) {
-  if(!max || max < 0) {
-    // I realise that if max===0 I can just return 0 right away instead, but if someone's asking for that,
-    // I feel like there's probably some error in their code somewhere. And with "someone" I mean me.
-    throw new Error("Provide a positive max value for the number to be generated");
+  if(max===0){return 0;}
+  if(max===undefined || max < 0) {
+    throw new Error("Provide a non-negative max value for the number to be generated");
   }
   // TODO if max >= Number.MAX_SAFE_INTEGER should probably throw some error (which could be ignored via a second arg?)
   let maxbits = Math.floor(Math.log2(max))+1;
@@ -287,7 +286,6 @@ ChaChaRand.prototype.sample = function(arr, sampleSize, orderMatters) {
   let n = arr.length;
   if(n===0) {throw new Error("Can't sample from empty");}
   if (sampleSize<= 0 || sampleSize > n) {
-    // That's right, no sampleSize===n... same reasoning as to why randomUInt throws on max===0 to be honest.
     throw new Error("Invalid sample size. The sample size should be positive and no more than the array's length");
   }
   // In this case we don't want to shuffle the list, so we avoid that by working over indices instead:
