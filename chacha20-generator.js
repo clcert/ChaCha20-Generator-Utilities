@@ -58,7 +58,7 @@ const ChaChaRand = function(seed) {
 // TODO make some sort of validateNum(num,max,min...) or something to streamline number validation and throw errors?
 ChaChaRand.CHACHA_BLOCK = 64; // bytes
 // Max number of bits one can request as number before asking values in a range where there's a loss of precision
-ChaChaRand.MAX_SAFE_BITS = Math.log2(Number.MAX_SAFE_INTEGER);
+ChaChaRand.MAX_SAFE_BITS = 53;
 
 // Reseed. Note the current block (if existent) is entirely lost once you csll reseed.
 ChaChaRand.prototype.reseed = function(seed) {
@@ -140,11 +140,11 @@ ChaChaRand.prototype.getByte = function() {
   return this.getBytes(1);
 };
 
-// get a random positive number in [0 , 2**(nbits-1)), up to MAX_SAFE_BITS bits
+// get a random positive number in [0 , 2**(nbits)-1), up to nbits = MAX_SAFE_BITS
 // TODO explain somewhere how js is weird about bitwise operators, to warn users against the int32 conversion
 ChaChaRand.prototype.getRandBits = function (nbits) {
   if(nbits > ChaChaRand.MAX_SAFE_BITS || nbits < 1) {
-    throw new Error(`Requested invalid number of bits. Safe bits to represent are in [0,${ChaChaRand.MAX_SAFE_BITS}]`);
+    throw new Error(`Requested invalid number of bits. Safe bits to represent are in [1,${ChaChaRand.MAX_SAFE_BITS}]`);
   }
   let neededBytes = Math.ceil((nbits)/8);
   let bytes = this.getBytes(neededBytes);
