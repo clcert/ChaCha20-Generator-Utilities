@@ -7,7 +7,7 @@
  *
  *
  *
- * * For ChaChaRand.prototype.random():
+ * * For ChaChaGen.prototype.random():
  * * Source https://github.com/davidbau/seedrandom/blob/released/seedrandom.js
  * * --------------------------------------------------------------------------
  * * Copyright 2014 David Bau.
@@ -32,22 +32,7 @@
  */
 
 
-// Quick function to get a hex string as an array of bytes
-// thanks https://stackoverflow.com/a/50868276/4192226
-function fromHexString (hexString) {
-  return new Uint8Array(hexString.match(/.{1,2}/g).map(function(byte){return parseInt(byte, 16);}));
-}
-// Maybe I should throw this one as a ChaChaRand.range() so it doesn't accidentally screw with other people's code?
-function myRange(start, stop, step) {
-  let a = [start], b = start;
-  while (b < stop) {
-    a.push(b += step || 1);
-  }
-  return a;
-}
-
-
-const ChaChaRand = function(seed) {
+const ChaChaGen = function(seed) {
   if(seed===undefined) {
     console.warn("No seed given. Please note no random seed values are provided by default, so not passing a seed " +
         "creates the same object as if it had been initialized with a string of 80 '0's concatenated together.");
@@ -55,17 +40,34 @@ const ChaChaRand = function(seed) {
   }
   this.reseed(seed);
 };
+
+// Quick function to get a hex string as an array of bytes
+// thanks https://stackoverflow.com/a/50868276/4192226
+ChaChaGen._fromHexString = function(hexString) {
+  return new Uint8Array(hexString.match(/.{1,2}/g).map(function(byte){return parseInt(byte, 16);}));
+};
+
+ChaChaGen._range = function(start, stop, step) {
+  let a = [start], b = start;
+  while (b < stop) {
+    a.push(b += step || 1);
+  }
+  return a;
+};
+
+
 // TODO make some sort of validateNum(num,max,min...) or something to streamline number validation and throw errors?
-ChaChaRand.CHACHA_BLOCK = 64; // bytes
+ChaChaGen.CHACHA_BLOCK = 64; // bytes
 // Max number of bits one can request as number before asking values in a range where there's a loss of precision
-ChaChaRand.MAX_SAFE_BITS = 53;
+ChaChaGen.MAX_SAFE_BITS = 53;
 
 // Reseed. Note the current block (if existent) is entirely lost once you csll reseed.
-ChaChaRand.prototype.reseed = function(seed) {
+ChaChaGen.prototype.reseed = function(seed) {
   // TODO validate the seed is actually a hex string
   let keyHexSize = CHACHA_KEYSIZE*2;
   let ivHexSize = CHACHA_IVSIZE*2;
   let seedSize = keyHexSize+ivHexSize;    // 80
+  let hexRe = /^[0-9a-fA-F]+$/;
   if(seed===undefined) {
     // No seed given, default to zeros:
     this._seed = "00000000000000000000000000000000000000000000000000000000000000000000000000000000";
@@ -73,14 +75,14 @@ ChaChaRand.prototype.reseed = function(seed) {
     this._key  = new Uint8Array(CHACHA_KEYSIZE);
     this._iv   = new Uint8Array(CHACHA_IVSIZE);
   }
-  else if(seed.length < seedSize) {
-    throw new Error(`When a seed is given, it should be a hex string at least ${seedSize} characters long`)
+  else if((seed.length < seedSize) || !hexRe.test(seed)) {
+    throw new Error(`When a seed is given, it should be a hex string at least ${seedSize} characters long.`)
   }
   else {
-    // A seed was given and ChaChaRand saw that it was good
+    // A seed was given and ChaChaGen saw that it was good
     this._seed = seed.substr(0, seedSize);
-    this._key = fromHexString(seed.substr(0, keyHexSize));
-    this._iv = fromHexString(seed.substr(keyHexSize, ivHexSize));
+    this._key = ChaChaGen._fromHexString(seed.substr(0, keyHexSize));
+    this._iv = ChaChaGen._fromHexString(seed.substr(keyHexSize, ivHexSize));
   }
   // Actually, I guess ^those don't need to be stored as instance variables, but I'll leave them for now just in case.
   this._chacha = new ChaCha(this._key.buffer, this._iv.buffer);
@@ -90,21 +92,21 @@ ChaChaRand.prototype.reseed = function(seed) {
   this._nextByteIndex = 0;
   this._blockCounter = 1;
 };
-//     (reseed would be practically the same as creating a new ChaChaRand with a new seed though, so it's whatever?)
+//     (reseed would be practically the same as creating a new ChaChaGen with a new seed though, so it's whatever?)
 
 // How many blocks has this generator produced so far with its seed? (each block is 64 bytes)
-ChaChaRand.prototype.generatedBlocksCount = function() {
+ChaChaGen.prototype.generatedBlocksCount = function() {
   return this._blockCounter;
 };
 // How many bits have been requested. Somewhat ill defined in that the block may be generated as the chacha's state
 // well before any bytes are requested via getByte(s).
-ChaChaRand.prototype.usedBitsCount = function() {
-  return this._nextByteIndex*8 + ((this._blockCounter-1)*(ChaChaRand.CHACHA_BLOCK*8));
+ChaChaGen.prototype.usedBytesCount = function() {
+  return this._nextByteIndex + ((this._blockCounter-1)*(ChaChaGen.CHACHA_BLOCK));
 };
 
 // Get a new block from the underlying chacha20 implementation.
 // Throws "output exhausted" if chacha20 has cycled through its counter values.
-ChaChaRand.prototype._newRandBlock = function() {
+ChaChaGen.prototype._newRandBlock = function() {
   // TODO handle the "output exhausted" error, and also... what should we do there?
   this._randBlock = new Uint8Array(this._chacha());
   this._blockCounter++;
@@ -112,7 +114,7 @@ ChaChaRand.prototype._newRandBlock = function() {
 };
 
 // Get the amount of bytes specified TODO see todo below
-ChaChaRand.prototype.getBytes = function(n) {
+ChaChaGen.prototype.getBytes = function(n) {
   // TODO (maybe?) throw an error if proceeding would cause an "output exhausted" error
   if(isNaN(n) || n<=0){
     throw new Error("Invalid number given (must be a positive number)");
@@ -136,15 +138,14 @@ ChaChaRand.prototype.getBytes = function(n) {
   return ret;
 };
 
-ChaChaRand.prototype.getByte = function() {
+ChaChaGen.prototype.getByte = function() {
   return this.getBytes(1);
 };
 
 // get a random positive number in [0 , 2**(nbits)-1), up to nbits = MAX_SAFE_BITS
-// TODO explain somewhere how js is weird about bitwise operators, to warn users against the int32 conversion
-ChaChaRand.prototype.getRandBits = function (nbits) {
-  if(nbits > ChaChaRand.MAX_SAFE_BITS || nbits < 1) {
-    throw new Error(`Requested invalid number of bits. Safe bits to represent are in [1,${ChaChaRand.MAX_SAFE_BITS}]`);
+ChaChaGen.prototype.getRandBits = function (nbits) {
+  if(nbits > ChaChaGen.MAX_SAFE_BITS || nbits < 1) {
+    throw new Error(`Requested invalid number of bits. Safe bits to represent are in [1,${ChaChaGen.MAX_SAFE_BITS}]`);
   }
   let neededBytes = Math.ceil((nbits)/8);
   let bytes = this.getBytes(neededBytes);
@@ -163,7 +164,7 @@ ChaChaRand.prototype.getRandBits = function (nbits) {
 };
 
 // Get a ramdom number in [0, max]
-ChaChaRand.prototype.randUInt = function(max) {
+ChaChaGen.prototype.randUInt = function(max) {
   if(max===0){return 0;}
   if(max===undefined || max < 0) {
     throw new Error("Provide a non-negative max value for the number to be generated");
@@ -178,14 +179,14 @@ ChaChaRand.prototype.randUInt = function(max) {
 };
 
 // Rand in [min, max]
-ChaChaRand.prototype.randInt = function(min, max) {
+ChaChaGen.prototype.randInt = function(min, max) {
   return this.randUInt(max - min) + min;
 };
 
 
 // This function returns a random double in [0, 1) that contains
 // randomness in every bit of the mantissa of the IEEE 754 value.
-ChaChaRand.prototype.random = function() {
+ChaChaGen.prototype.random = function() {
   // David Bau's code and comments, but replacing RC4 with ChaCha20. Also replaced "math" with "Math" and var with let
   // The following constants are related to IEEE 754 limits.
   let width = 256,        // each ChaCha20 output is 0 <= x < 256
@@ -214,7 +215,7 @@ ChaChaRand.prototype.random = function() {
 // Fisher Yates shuffle, but it can be stopped after the given number of steps, and if so
 // it returns only the last 'steps' elements of the shuffled array (so it can be used for random sampling)
 // Note it's in-place so it rearranges the list you give it
-ChaChaRand.prototype._FisherYates = function(arr, steps) {
+ChaChaGen.prototype._FisherYates = function(arr, steps) {
   let n = arr.length;
   if(n===0) {throw new Error("Can't shuffle empty");}
   let complete = steps===undefined;
@@ -226,7 +227,6 @@ ChaChaRand.prototype._FisherYates = function(arr, steps) {
   if (steps <= 0 || steps > (n-1)) {
     throw new Error("Invalid 'steps' value. The number of steps should be positive and no more than the array's length - 1");
   }
-  // let peeps = myRange(1,n);
   let j = n, selections = 0;
   while(selections < steps) {
     let k = this.randUInt(j-1);
@@ -242,7 +242,7 @@ ChaChaRand.prototype._FisherYates = function(arr, steps) {
 };
 
 // Fisher Yates shuffle. Shuffles in place, so arr is modified.
-ChaChaRand.prototype.shuffle = function(arr) {
+ChaChaGen.prototype.shuffle = function(arr) {
   this._FisherYates(arr);
   // return arr; commented because it's in place and a return value might make you think it's not.
 };
@@ -250,7 +250,7 @@ ChaChaRand.prototype.shuffle = function(arr) {
 
 // Reservoir sampling. Note it returns indices, not arr's contents. Used to be the base for sample()
 // but I replaced it with the stoppable Fisher-Yates method... not deleting it just yet just in case
-ChaChaRand.prototype._reservoirSampling = function(arr, sampleSize) {
+ChaChaGen.prototype._reservoirSampling = function(arr, sampleSize) {
   let n = arr.length;
   if(n===0) {throw new Error("Can't sample from empty");}
   if(sampleSize <= 0 || sampleSize>=n) {
@@ -276,7 +276,8 @@ ChaChaRand.prototype._reservoirSampling = function(arr, sampleSize) {
 // Random sample of arr (objects from the sample are the same as the ones in the original array given).
 // Setting orderMatters to false allows the function to use less entropy when sampleSize > arr.length/2
 // but the resulting list will have the chosen elements appearing in their original order.
-ChaChaRand.prototype.sample = function(arr, sampleSize, orderMatters) {
+ChaChaGen.prototype.sample = function(arr, sampleSize, orderMatters) {
+  if(sampleSize===undefined) { throw new Error("No sample size provided.")}
   if(orderMatters===undefined){
     // If orderMatters, the returned list can be used when you want to *sequentially* choose sampleSize random elements
     // from arr. If it doesn't we can do an entropy optimization, which will be biased to be ordered so that
@@ -284,12 +285,12 @@ ChaChaRand.prototype.sample = function(arr, sampleSize, orderMatters) {
     orderMatters=true;
   }
   let n = arr.length;
-  if(n===0) {throw new Error("Can't sample from empty");}
+  if(n===0) {throw new Error("Can't sample from empty.");}
   if (sampleSize<= 0 || sampleSize > n) {
-    throw new Error("Invalid sample size. The sample size should be positive and no more than the array's length");
+    throw new Error("Invalid sample size. The sample size should be positive and no more than the array's length.");
   }
   // In this case we don't want to shuffle the list, so we avoid that by working over indices instead:
-  let indices = myRange(0,n-1);
+  let indices = ChaChaGen._range(0,n-1);
   let indicesSample = [];
   // Let's allow this I suppose, since asking for it it kinda maybe makes sense if the order matters.
   if(sampleSize===n) {
@@ -330,7 +331,7 @@ ChaChaRand.prototype.sample = function(arr, sampleSize, orderMatters) {
 };
 
 // Return a random element from the given array. Throws "Can't choose from empty" if arr.length === 0.
-ChaChaRand.prototype.choice = function(arr) {
+ChaChaGen.prototype.choice = function(arr) {
   let n = arr.length;
   if(n===0) {throw new Error("Can't choose from empty");}
   let chosen = this.randUInt(n-1);
@@ -339,15 +340,15 @@ ChaChaRand.prototype.choice = function(arr) {
 
 // Sampling of size k, but with replacement. Throws "Can't choose from empty" if arr.length === 0
 // It'd be neat to implement it like Python with all those "weights" parameters, but that's a maybe in the future deal.
-ChaChaRand.prototype.choices = function (arr, choicesSize) {
+ChaChaGen.prototype.choices = function (arr, choicesSize) {
   let n = arr.length;
   if(n===0) {throw new Error("Can't choose from empty");}
-  if (choicesSize <= 0 || choicesSize > (n-1)) {
+  if (choicesSize <= 0) {
     throw new Error("Invalid choices size. Size should be positive.");
   }
   let res = [];
   for(let i = 0; i < choicesSize; i++) {
-    let chosen = this.randUInt(n);
+    let chosen = this.randUInt(n-1);
     res.push(arr[chosen]);
   }
   return res;
