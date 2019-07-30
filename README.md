@@ -139,16 +139,21 @@ example, [BigInt](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Refere
 ECMAScript specification, meaning it's an approved candidate proposal, 
 but not yet finished) to construct numbers bigger than `MAX_SAFE_INTEGER`.
 
-For example, if we want to get a precise 54 bits number, we can do so by 
-constructing a 54 bits BigInt from concatenating one 1 bit BigInt at the 
-end of a 53 bits BigInt, like so this:
+For example, if we only have access to numbers less than `MAX_SAFE_INTEGER` 
+and we want to get a precise 54 bits number, we can do so by constructing 
+a 54 bits BigInt from concatenating one 1 bit BigInt at the end of a 53 
+bits BigInt, like this:
 ```js
 let bigFragment1 = BigInt(Number.MAX_SAFE_INTEGER);   // 9007199254740991n
 let bigFragment2 = BigInt(1);                         // 1n
 let big = bigFragment1*BigInt(2) + bigFragment1       // 18014398509481983n
-
 ```
- 
+You may want to construct big numbers differently depending on your application, 
+on which browsers you need to support and/or on your preference of BigInt constructor. 
+In case you need one, here are some BigInt polyfills:  
+[https://github.com/GoogleChromeLabs/jsbi](https://github.com/GoogleChromeLabs/jsbi)  
+[https://github.com/peterolson/BigInteger.js/](https://github.com/peterolson/BigInteger.js/)  
+  
 
 #### Beware of how JavaScript does bitwise operations:  
 Although this is not a limitation of the library itself, it may be worth it 
