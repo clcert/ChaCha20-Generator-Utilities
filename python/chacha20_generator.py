@@ -6,7 +6,7 @@ def zero_fill_right_shift(val, n):
     return (val >> n) if val >= 0 else ((val + 0x100000000) >> n)
 
 
-class ChaChaRand:
+class ChaChaGen:
 
     def __init__(self, seed='00'*40):
         self.zeros = bytes.fromhex('00' * 64)
@@ -32,7 +32,7 @@ class ChaChaRand:
         self._next_byte_index = 0;
         self._block_counter += 1;
 
-    def get_bytes(self, n):
+    def getbytes(self, n):
         end_index = self._next_byte_index + n
         ret = self._rand_block[self._next_byte_index:end_index]
         self._next_byte_index += n
@@ -46,12 +46,12 @@ class ChaChaRand:
             self._next_byte_index = missing
         return ret
 
-    def get_byte(self):
-        return self.get_bytes(1)
+    def getbyte(self):
+        return self.getbytes(1)
 
-    def get_rand_bits(self, nbits):
+    def getrandbits(self, nbits):
         needed_bytes = math.ceil(nbits / 8)
-        bytes = self.get_bytes(needed_bytes)
+        bytes = self.getbytes(needed_bytes)
         ret = 0
         extra_bits = nbits % 8
         bitmask = (1<<extra_bits) - 1 if extra_bits else -1
@@ -61,15 +61,15 @@ class ChaChaRand:
             ret += bytes[i]
         return ret
 
-    def rand_uint(self, max):
+    def _randuint(self, max):
         maxbits = math.floor(math.log2(max)) + 1
-        ret = self.get_rand_bits(maxbits)
+        ret = self.getrandbits(maxbits)
         while ret > max:
-            ret = self.get_rand_bits(maxbits)
+            ret = self.getrandbits(maxbits)
         return ret
 
-    def rand_int(self, min, max):
-        return self.rand_uint(max - min) + min
+    def randint(self, min, max):
+        return self._randuint(max - min) + min
 
     def random(self):
         width = 256
@@ -78,13 +78,13 @@ class ChaChaRand:
         startdenom = pow(width, chunks)
         significance = pow(2, digits)
         overflow = significance * 2
-        n = self.get_rand_bits(chunks*8)
+        n = self.getrandbits(chunks*8)
         d = startdenom
         x = 0
         while n < significance:
             n = (n + x) * width
             d *= width
-            x = self.get_rand_bits(8)
+            x = self.getrandbits(8)
         while n >= overflow:
             n /= 2
             d /= 2
@@ -101,7 +101,7 @@ class ChaChaRand:
         j = n
         selections = 0
         while selections < steps:
-            k = self.rand_uint(j - 1)
+            k = self._randuint(j - 1)
             aux = arr[k]
             arr[k] = arr[j - 1]
             arr[j - 1] = aux
@@ -141,7 +141,7 @@ class ChaChaRand:
 
     def choice(self, arr):
         n = len(arr)
-        chosen = self.rand_uint(n - 1)
+        chosen = self._randuint(n - 1)
         return arr[chosen]
 
     def choices(self, arr, choices_size):
@@ -150,6 +150,6 @@ class ChaChaRand:
             pass
         res = []
         for i in range(choices_size):
-            chosen = self.rand_uint(n-1)
+            chosen = self._randuint(n-1)
             res.append(arr[chosen])
         return res
