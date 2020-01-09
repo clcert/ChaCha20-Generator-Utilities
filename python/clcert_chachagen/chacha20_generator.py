@@ -1,8 +1,32 @@
 import math
 from Crypto.Cipher import ChaCha20
 
+'''
+For ChaChaGen.prototype.random():
+Source https://github.com/davidbau/seedrandom/blob/released/seedrandom.js
+--------------------------------------------------------------------------
+Copyright 2014 David Bau.
 
-def zero_fill_right_shift(val, n):
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'''
+
+def _zero_fill_right_shift(val, n):
     return (val >> n) if val >= 0 else ((val + 0x100000000) >> n)
 
 
@@ -88,7 +112,7 @@ class ChaChaGen:
         while n >= overflow:
             n /= 2
             d /= 2
-            x = zero_fill_right_shift(x, 1)
+            x = _zero_fill_right_shift(x, 1)
         return (n + x) / d
 
     def _fisher_yates(self, arr, steps=None):

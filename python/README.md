@@ -1,6 +1,8 @@
 # ChaCha20-Generator-Utilities - Python
 Uses the ChaCha20 implementation in pycryptodome https://pycryptodome.readthedocs.io/en/latest/ as a base for various functions related to random number generation.
 
+The actual file is chacha20_generator.py inside the folder "clcert_chachagen", but we structured it this way to make use of setup.py and make the python version a proper package.
+
 ## Requirements
 ```
 $ pip install -r requirements.txt
