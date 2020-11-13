@@ -145,7 +145,7 @@ class ChaChaGen:
         if sample_size == n:
             if order_matters:
                 self.shuffle(indices)
-                indice_sample = indices[::-1]
+                indices_sample = indices[::-1]
             else:
                 indices_sample = indices
         elif sample_size <= n/2 or order_matters:

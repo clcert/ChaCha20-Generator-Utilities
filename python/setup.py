@@ -5,11 +5,11 @@ with open("README.md", "r") as fh:
 
 setup(
     name='clcert_chachagen',
-    version='1.0',
+    version='1.1',
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=['clcert_chachagen'],
-    url='https://github.com/FrancoPinoC/ChaCha20-Generator-Utilities/tree/master/python',
+    url='https://github.com/clcert/ChaCha20-Generator-Utilities/tree/master/python',
     license='',
     author='Camilo Gómez, Franco Pino',
     author_email='random@uchile.cl ',
